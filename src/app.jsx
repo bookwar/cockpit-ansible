@@ -21,28 +21,62 @@ import cockpit from 'cockpit';
 import React from 'react';
 import { Alert } from "@patternfly/react-core/dist/esm/components/Alert/index.js";
 import { Card, CardBody, CardTitle } from "@patternfly/react-core/dist/esm/components/Card/index.js";
+import {TreeView, Button} from '@patternfly/react-core';
+
+import {DataList, DataListItem, DataListItemRow, DataListItemCells, DataListCell} from '@patternfly/react-core';
 
 const _ = cockpit.gettext;
+
+export const InventoryListItem = (props) =>
+  <DataListItem aria-labelledby="inventory-list-item">
+      <DataListItemRow>
+      <DataListItemCells dataListCells={[
+		   <DataListCell key="primary {props.host} content">
+		      <span id="inventory-list-item">Host {props.host}</span>
+		   </DataListCell>,
+		   <DataListCell key="secondary {props.host} content"> Host description
+		 	   </DataListCell>
+		   ]}
+	    />
+      </DataListItemRow>
+  </DataListItem>;
+
+export const InventoryList = (props) =>
+<DataList aria-label="Ansible Inventory List">
+    {props.hosts.map(host => <InventoryListItem host={host} />)}
+</DataList>;
 
 export class Application extends React.Component {
     constructor() {
         super();
-        this.state = { hostname: _("Unknown") };
+        this.state = {
+	    inventory: {},
+	    hosts: [],
+	};
 
-        cockpit.file('/etc/hostname').watch(content => {
-            this.setState({ hostname: content.trim() });
-        });
+	cockpit.spawn(['ansible-inventory', '-i', '/tmp/hosts', '--list']).then(data => {
+	    const inventory = JSON.parse(data)
+
+	    // Ansible Inventory produces the JSON data with the groups hierarchy.
+	    // Here is the messy way to get the simple list of unique hostnames from that data.
+	    
+	    const hosts = [...new Set(Object.values(inventory).reduce(
+		(accumulator, currentValue) => accumulator.concat(currentValue["hosts"]),
+		[],))].filter(element => {
+		    return element !== undefined;
+		});
+ 	    
+	    this.setState({ inventory: inventory, hosts: hosts});
+	});
+	
     }
 
     render() {
         return (
             <Card>
-                <CardTitle>Starter Kit</CardTitle>
+                <CardTitle>Ansible Inventory</CardTitle>
                 <CardBody>
-                    <Alert
-                        variant="info"
-                        title={ cockpit.format(_("Running on $0"), this.state.hostname) }
-                    />
+		    <InventoryList hosts={this.state.hosts} />    
                 </CardBody>
             </Card>
         );
